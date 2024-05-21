@@ -24,7 +24,7 @@ function getUserLocations($conn, $user_id) {
 // Function to fetch weather data from OpenWeatherMap API
 function getWeatherData($location) {
     $apiKey = '219ff162a58589430fc465f29dd1d386'; // Replace with your OpenWeatherMap API key
-    $apiUrl = "https://api.openweathermap.org/data/2.5/weather?q=$location&appid=$apiKey&units=metric";
+    $apiUrl = "https://api.openweathermap.org/data/2.5/forecast?q=$location&appid=$apiKey&units=metric";
     $response = file_get_contents($apiUrl);
 
     if ($response === FALSE) {
@@ -33,11 +33,49 @@ function getWeatherData($location) {
 
     $weatherData = json_decode($response, true);
 
-    if ($weatherData['cod'] != 200) {
+    if ($weatherData['cod'] != "200") {
         return null; // Invalid response from API
     }
 
     return $weatherData;
+}
+
+// Function to process forecast data
+function processForecastData($forecastData) {
+    $days = [];
+    foreach ($forecastData['list'] as $entry) {
+        $date = explode(' ', $entry['dt_txt'])[0];
+        if (!isset($days[$date])) {
+            $days[$date] = [
+                'temp' => [],
+                'feels_like' => [],
+                'pressure' => [],
+                'humidity' => [],
+                'weather' => $entry['weather'][0],
+                'wind_speed' => [],
+            ];
+        }
+
+        $days[$date]['temp'][] = $entry['main']['temp'];
+        $days[$date]['feels_like'][] = $entry['main']['feels_like'];
+        $days[$date]['pressure'][] = $entry['main']['pressure'];
+        $days[$date]['humidity'][] = $entry['main']['humidity'];
+        $days[$date]['wind_speed'][] = $entry['wind']['speed'];
+    }
+
+    $dailySummaries = [];
+    foreach ($days as $date => $data) {
+        $dailySummaries[$date] = [
+            'temp' => round(array_sum($data['temp']) / count($data['temp']), 1),
+            'feels_like' => round(array_sum($data['feels_like']) / count($data['feels_like']), 1),
+            'pressure' => round(array_sum($data['pressure']) / count($data['pressure']), 1),
+            'humidity' => round(array_sum($data['humidity']) / count($data['humidity']), 1),
+            'weather' => $data['weather'],
+            'wind_speed' => round(array_sum($data['wind_speed']) / count($data['wind_speed']), 1),
+        ];
+    }
+
+    return $dailySummaries;
 }
 
 // Handle add location form submission
@@ -67,16 +105,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Welcome</title>
+    <title>Weather Forecast System</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="./css/style.css">
+    <style>
+        .weather-card {
+            margin: 20px 0;
+        }
+        .weather-card img {
+            width: 50px;
+            height: 50px;
+        }
+        .weather-card .card-header {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
 <?php include('navbar.php'); ?>
 
-<div class="container mb-5">
+<div class="container">
     <h2>Manage Your Locations</h2>
     <form id="add-location-form" method="post" action="">
         <div class="form-group">
@@ -87,78 +138,67 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </form>
     
     <h3>Your Locations</h3>
-    <div class="table-responsive">
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Location</th>
-                <th>Coordinates</th>
-                <th>Weather</th>
-                <th>Temperature (°C)</th>
-                <th>Feels Like (°C)</th>
-                <th>Min Temp (°C)</th>
-                <th>Max Temp (°C)</th>
-                <th>Pressure (hPa)</th>
-                <th>Humidity (%)</th>
-                <th>Visibility (m)</th>
-                <th>Wind Speed (m/s)</th>
-                <th>Wind Direction (°)</th>
-                <th>Cloudiness (%)</th>
-                <th>Sunrise</th>
-                <th>Sunset</th>
-                <th>Remove</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php
-            $locations = getUserLocations($conn, $user_id);
-            foreach ($locations as $loc) {
-                $weatherData = getWeatherData($loc['location']);
-                if ($weatherData) {
-                    $coordinates = "Lon: " . $weatherData['coord']['lon'] . ", Lat: " . $weatherData['coord']['lat'];
-                    $weather = $weatherData['weather'][0]['main'] . " (" . $weatherData['weather'][0]['description'] . ")";
-                    $temp = $weatherData['main']['temp'];
-                    $feels_like = $weatherData['main']['feels_like'];
-                    $temp_min = $weatherData['main']['temp_min'];
-                    $temp_max = $weatherData['main']['temp_max'];
-                    $pressure = $weatherData['main']['pressure'];
-                    $humidity = $weatherData['main']['humidity'];
-                    $visibility = $weatherData['visibility'];
-                    $wind_speed = $weatherData['wind']['speed'];
-                    $wind_deg = $weatherData['wind']['deg'];
-                    $cloudiness = $weatherData['clouds']['all'];
-                    $sunrise = date("H:i:s", $weatherData['sys']['sunrise']);
-                    $sunset = date("H:i:s", $weatherData['sys']['sunset']);
-                    echo "<tr>
-                            <td>{$loc['location']}</td>
-                            <td>{$coordinates}</td>
-                            <td>{$weather}</td>
-                            <td>{$temp}</td>
-                            <td>{$feels_like}</td>
-                            <td>{$temp_min}</td>
-                            <td>{$temp_max}</td>
-                            <td>{$pressure}</td>
-                            <td>{$humidity}</td>
-                            <td>{$visibility}</td>
-                            <td>{$wind_speed}</td>
-                            <td>{$wind_deg}</td>
-                            <td>{$cloudiness}</td>
-                            <td>{$sunrise}</td>
-                            <td>{$sunset}</td>
-                            <td><button class='remove-location btn btn-danger' data-id='{$loc['id']}'>Remove</button></td>
-                        </tr>";
-                } else {
-                    echo "<tr>
-                            <td>{$loc['location']}</td>
-                            <td colspan='15'>Weather data not available</td>
-                        </tr>";
-                }
-            }
-            ?>
-        </tbody>
-    </table>
-</div>
+    <div class="row">
+        <?php
+        $locations = getUserLocations($conn, $user_id);
+        foreach ($locations as $loc) {
+            $weatherData = getWeatherData($loc['location']);
+            if ($weatherData) {
+                $dailySummaries = processForecastData($weatherData);
 
+                echo "<div class='col-md-4 weather-card'>";
+                echo "<div class='card'>";
+                echo "<div class='card-header'>{$loc['location']} <button class='remove-location btn btn-danger btn-sm float-right' data-id='{$loc['id']}'>Remove</button></div>";
+                echo "<div class='card-body'>";
+
+                $today = date('Y-m-d');
+                $tomorrow = date('Y-m-d', strtotime('+1 day'));
+                $dayAfterTomorrow = date('Y-m-d', strtotime('+2 days'));
+
+                $getWeatherCard = function($data, $date) {
+                    $icon = $data['weather']['icon'];
+                    $description = ucfirst($data['weather']['description']);
+                    $temp = $data['temp'];
+                    $feels_like = $data['feels_like'];
+                    $humidity = $data['humidity'];
+                    $pressure = $data['pressure'];
+                    $wind_speed = $data['wind_speed'];
+
+                    return "
+                    <div class='card mb-3'>
+                        <div class='card-body'>
+                            <h5 class='card-title'>{$date}</h5>
+                            <p class='card-text'><img src='https://openweathermap.org/img/wn/{$icon}.png' alt='{$description}'> {$description}</p>
+                            <p class='card-text'>Temperature: {$temp}°C</p>
+                            <p class='card-text'>Feels Like: {$feels_like}°C</p>
+                            <p class='card-text'>Humidity: {$humidity}%</p>
+                            <p class='card-text'>Pressure: {$pressure} hPa</p>
+                            <p class='card-text'>Wind Speed: {$wind_speed} m/s</p>
+                        </div>
+                    </div>";
+                };
+
+                echo $getWeatherCard($dailySummaries[$today] ?? [], 'Today');
+                echo $getWeatherCard($dailySummaries[$tomorrow] ?? [], 'Tomorrow');
+                echo $getWeatherCard($dailySummaries[$dayAfterTomorrow] ?? [], 'Day After Tomorrow');
+
+                echo "</div>";
+                echo "</div>";
+                echo "</div>";
+            } else {
+                echo "
+                <div class='col-md-4 weather-card'>
+                    <div class='card'>
+                        <div class='card-header'>{$loc['location']} <button class='remove-location btn btn-danger btn-sm float-right' data-id='{$loc['id']}'>Remove</button></div>
+                        <div class='card-body'>
+                            <p>Weather data not available</p>
+                        </div>
+                    </div>
+                </div>";
+            }
+        }
+        ?>
+    </div>
 </div>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
