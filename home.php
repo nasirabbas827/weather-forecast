@@ -150,6 +150,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 echo "<div class='card'>";
                 echo "<div class='card-header'>{$loc['location']} <button class='remove-location btn btn-danger btn-sm float-right' data-id='{$loc['id']}'>Remove</button></div>";
                 echo "<div class='card-body'>";
+                echo "<a href='forecast.php?location={$loc['location']}' class='mb-2 btn btn-primary'>View 24-Hour Forecast</a>";
 
                 $today = date('Y-m-d');
                 $tomorrow = date('Y-m-d', strtotime('+1 day'));
