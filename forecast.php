@@ -10,7 +10,7 @@ if (!isset($_SESSION["id"]) || empty($_SESSION["id"])) {
 $user_id = $_SESSION["id"];
 
 function getWeatherData($location) {
-    $apiKey = '219ff162a58589430fc465f29dd1d386'; // Replace with your OpenWeatherMap API key
+    $apiKey = "YOUR_OWN_API_KEY"; // Replace with your OpenWeatherMap API key
     $apiUrl = "https://api.openweathermap.org/data/2.5/forecast?q=$location&appid=$apiKey&units=metric";
     $response = file_get_contents($apiUrl);
 
